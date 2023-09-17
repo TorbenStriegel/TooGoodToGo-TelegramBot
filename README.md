@@ -1,6 +1,6 @@
 # Too Good To Go Python Bot
 
-*Hi welcome to the HKA TGTG Bot:*
+*Hi welcome to the TGTG Bot:*
 
 The bot will notify you as soon as new bags from your favorites are available.
 
