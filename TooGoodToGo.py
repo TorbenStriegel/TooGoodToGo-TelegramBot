@@ -6,27 +6,6 @@ from datetime import datetime, timezone
 from telebot import TeleBot, types
 from tgtg import TgtgClient
 
-bot = TeleBot('<Telegram-access-token>')
-
-
-def send_message(telegram_user_id, message):
-    bot.send_message(telegram_user_id, text=message)
-
-
-def send_message_with_link(telegram_user_id, message, item_id):
-    bot.send_message(telegram_user_id, text=message, reply_markup=types.InlineKeyboardMarkup(
-        keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text="Open in app 📱",
-                    callback_data="open_app",
-                    url="https://share.toogoodtogo.com/item/" + item_id
-                )
-            ],
-        ]
-    )
-                     )
-
 
 class TooGoodToGo:
     users_login_data = {}
@@ -35,17 +14,35 @@ class TooGoodToGo:
     connected_clients = {}
     client = TgtgClient
 
-    def __init__(self):
+    def __init__(self, bot_token):
+        self.bot = TeleBot(bot_token)
         self.read_users_login_data_from_txt()
         self.read_users_settings_data_from_txt()
         self.read_available_items_favorites_from_txt()
         start_new_thread(self.get_available_items_per_user, ())
-        bot.set_my_commands([
+        self.bot.set_my_commands([
             types.BotCommand("/info", "favorite bags that currently available"),
             types.BotCommand("/login", "log in with your mail"),
             types.BotCommand("/settings", "set when you want to be notified"),
             types.BotCommand("/help", "short explanation"),
         ])
+
+    def send_message(self, telegram_user_id, message):
+        self.bot.send_message(telegram_user_id, text=message)
+
+    def send_message_with_link(self, telegram_user_id, message, item_id):
+        self.bot.send_message(telegram_user_id, text=message, reply_markup=types.InlineKeyboardMarkup(
+            keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="Open in app 📱",
+                        callback_data="open_app",
+                        url="https://share.toogoodtogo.com/item/" + item_id
+                    )
+                ],
+            ]
+        )
+                              )
 
     def read_users_login_data_from_txt(self):
         with open('users_login_data.txt', 'r') as file:
@@ -88,7 +85,7 @@ class TooGoodToGo:
         client = TgtgClient(email=email)
         credentials = client.get_credentials()
         self.add_user(telegram_user_id, credentials)
-        send_message(telegram_user_id, "✅ You are now logged in!")
+        self.send_message(telegram_user_id, "✅ You are now logged in!")
 
     # Looks if the user is already logged in
     def find_credentials_by_telegramUserID(self, user_id):
@@ -132,10 +129,10 @@ class TooGoodToGo:
                             timezone.utc).strftime("%a %d.%m at %H:%M")), str(
                         datetime.strptime(item['pickup_interval']['end'], '%Y-%m-%dT%H:%M:%SZ').astimezone(
                             timezone.utc).strftime("%a %d.%m at %H:%M")))
-                send_message_with_link(user_id, text, item_id)
+                self.send_message_with_link(user_id, text, item_id)
                 available_items.append(item)
         if len(available_items) == 0:
-            send_message(user_id, "Currently all your favorites are sold out 😕")
+            self.send_message(user_id, "Currently all your favorites are sold out 😕")
 
     # Loop through all users and see if the number has changed
     def get_available_items_per_user(self):
@@ -181,11 +178,12 @@ class TooGoodToGo:
                                         datetime.strptime(item['pickup_interval']['start'],
                                                           "%Y-%m-%dT%H:%M:%SZ").astimezone(
                                             timezone.utc).strftime("%a %d.%m at %H:%M")), str(
-                                        datetime.strptime(item['pickup_interval']['end'], '%Y-%m-%dT%H:%M:%SZ').astimezone(
+                                        datetime.strptime(item['pickup_interval']['end'],
+                                                          '%Y-%m-%dT%H:%M:%SZ').astimezone(
                                             timezone.utc).strftime("%a %d.%m at %H:%M")))
                             text += "\n" + saved_status
                             print(saved_status + " Telegram USER_ID: " + key + "\n" + text)
-                            send_message_with_link(key, text, item_id)
+                            self.send_message_with_link(key, text, item_id)
                 self.save_available_items_favorites_to_txt()
                 time.sleep(60)
             except Exception as err:
