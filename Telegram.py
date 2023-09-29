@@ -1,14 +1,18 @@
-﻿import re
+import re
+import configparser
 import asyncio
 from _thread import start_new_thread
 
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 
-from ChatBots_TooGoodToGo import TooGoodToGo
+from TooGoodToGo import TooGoodToGo
 
-bot = AsyncTeleBot('<Telegram-access-token>')
-tooGoodToGo = TooGoodToGo()
+config = configparser.ConfigParser()
+config.read('config.ini')
+token = config['Telegram']['token']
+bot = AsyncTeleBot(token)
+tooGoodToGo = TooGoodToGo(token)
 
 
 # Handle '/start' and '/help'
@@ -16,7 +20,7 @@ tooGoodToGo = TooGoodToGo()
 async def send_welcome(message):
     await bot.send_message(message.chat.id,
                            """
-*Hi welcome to the HKA TGTG Bot:*
+*Hi welcome to the TGTG Bot:*
 
 The bot will notify you as soon as new bags from your favorites are available.
 
