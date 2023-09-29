@@ -19,7 +19,7 @@ _🌐 You can find more information about Too Good To Go_ [here](https://www.too
 *🌍 LET'S FIGHT food waste TOGETHER 🌎*
 
 ## Getting Started
-Clone the project to your local PC and replace <telegram-access-token> with your own bot access token you got from Telegram [@BotFather](https://core.telegram.org/bots/tutorial#getting-ready).
+Clone the project to your local PC and replace `<YOUR-TOKEN>` in `config.ini` with your own bot access token that you obtained from Telegram. You can create a bot and obtain a token by following the steps outlined [here](https://core.telegram.org/bots/tutorial#getting-ready).
 
 ### Requires
 Python version: 3.8+
