@@ -6,7 +6,7 @@ The bot will notify you as soon as new bags from your favorites are available.
 
 *❗️️This is necessary if you want to use the bot❗️*
 🔑 To login into your TooGoodToGo account enter 
-*/login email@example.com*
+*/login email@example.com*, in your Telegram client, in the chat with your bot.
 _You will then receive an email with a confirmation link.
 You do not need to enter a password._
 
