@@ -1,0 +1,9 @@
+[Telegram]
+token = <YOUR_TOKEN>
+
+[TGTG]
+; Optional proxy – leave empty if not needed (works fine without)
+; Only required if your IP is permanently blocked by TGTG
+; Example: http://user:pass@proxy:8080 or socks5://proxy:1080
+proxy =
+

@@ -1,0 +1,22 @@
+# User data (contains personal credentials and settings)
+users_login_data.txt
+users_settings_data.txt
+available_items_favorites.txt
+
+# Config (contains bot token)
+config.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+

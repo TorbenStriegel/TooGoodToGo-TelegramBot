@@ -1,31 +1,5 @@
-aiodns==3.0.0
-aiohttp
-aiohttp-socks==0.8.0
-aiosignal==1.3.1
-async-timeout==4.0.2
-attrs==23.1.0
-black==23.7.0
-certifi==2023.5.7
-cffi
-charset-normalizer==3.1.0
-click==8.1.5
-colorama==0.4.6
-frozenlist
-idna==3.4
-markdown-it-py==2.2.0
-mdurl==0.1.2
-multidict==6.0.4
-mypy-extensions==1.0.0
-packaging==23.1
-pathspec==0.11.1
-platformdirs==3.8.1
-pycares==4.3.0
-pycparser==2.21
-Pygments==2.15.1
-pyTelegramBotAPI==4.12.0
-python-socks==2.2.0
-requests==2.31.0
-rich==13.3.5
-tgtg==0.18.0
-urllib3==2.0.2
-yarl==1.9.2
+# tgtg is bundled locally (tgtg/) with Datadome + PIN auth patch from PR #378
+# See: https://github.com/ahivert/tgtg-python/pull/378
+pyTelegramBotAPI>=4.33.0
+requests>=2.33.1
+aiohttp>=3.9.0
