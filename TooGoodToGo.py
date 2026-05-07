@@ -5,9 +5,11 @@ import time
 from datetime import datetime, timezone
 from threading import Thread
 
+import requests
+
 from telebot import TeleBot, types
 from tgtg import TgtgClient
-from tgtg.exceptions import TgtgLoginError
+from tgtg.exceptions import TgtgAPIError, TgtgLoginError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -363,6 +365,29 @@ class TooGoodToGo:
                         self.connect(user_id)
                         time.sleep(1)
                         items = self.get_favourite_items()
+                    except (TgtgAPIError, requests.exceptions.ConnectionError) as exc:
+                        self.connected_clients.pop(user_id, None)
+                        captcha_url = self._extract_captcha_url(str(exc))
+                        if captcha_url:
+                            logger.warning(
+                                "Captcha block during polling for user %s – IP is blocked by Datadome.",
+                                user_id,
+                            )
+                            self.send_message(
+                                user_id,
+                                "🚫 *Your IP address appears to be blocked by Too Good To Go.*\n\n"
+                                "The bot could not fetch your favorites because of a CAPTCHA challenge.\n\n"
+                                "💡 *Please try switching to a different network* (e.g. mobile hotspot / VPN) "
+                                "and restart the bot.\n\n"
+                                "The bot will retry automatically in 5 minutes.",
+                            )
+                            logger.info("Waiting 5 minutes before next poll attempt after captcha block.")
+                            time.sleep(5 * 60)
+                        else:
+                            logger.exception(
+                                "Error fetching items for user %s – resetting connection", user_id
+                            )
+                        continue
                     except Exception:
                         logger.exception("Error fetching items for user %s – resetting connection", user_id)
                         self.connected_clients.pop(user_id, None)
