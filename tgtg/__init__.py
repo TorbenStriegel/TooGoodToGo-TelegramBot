@@ -27,6 +27,7 @@ CREATE_ORDER_ENDPOINT = "order/v8/create/"
 ABORT_ORDER_ENDPOINT = "order/v8/{}/abort"
 ORDER_STATUS_ENDPOINT = "order/v8/{}/status"
 API_BUCKET_ENDPOINT = "discover/v1/bucket"
+MANUFACTURER_ITEM_ENDPOINT = "manufactureritem/v2"
 DATADOME_SDK_URL = "https://api-sdk.datadome.co/sdk/"
 DEFAULT_APK_VERSION = "24.11.0"
 USER_AGENTS = [
@@ -113,9 +114,7 @@ class TgtgClient:
             "user-agent": self.user_agent,
             "x-correlation-id": self.correlation_id,
         }
-        # Only set Cookie header if no datadome cookie is managed by the session.
-        # The session cookie jar handles datadome automatically via _post().
-        if self.cookie and "datadome" not in self.session.cookies:
+        if self.cookie:
             headers["Cookie"] = self.cookie
         if self.access_token:
             headers["authorization"] = f"Bearer {self.access_token}"
@@ -503,3 +502,27 @@ class TgtgClient:
             return response.json()
         else:
             raise TgtgAPIError(response.status_code, response.content)
+
+    def get_manufacturer_items(self):
+        self.login()
+
+        data = {
+            "display_types_accepted": ["LIST"],
+            "element_types_accepted": [
+                "ITEM",
+                "NPS",
+                "TEXT",
+                "DUO_ITEMS",
+                "MANUFACTURER_STORY_CARD",
+            ],
+            "action_types_accepted": [],
+        }
+        response = self._post(
+            self._get_url(MANUFACTURER_ITEM_ENDPOINT),
+            json=data,
+        )
+        if response.status_code == HTTPStatus.OK:
+            return response.json()
+        else:
+            raise TgtgAPIError(response.status_code, response.content)
+

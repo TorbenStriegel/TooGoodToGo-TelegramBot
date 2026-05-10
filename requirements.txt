@@ -1,5 +1,7 @@
-# tgtg is bundled locally (tgtg/) with Datadome + PIN auth patch from PR #378
-# See: https://github.com/ahivert/tgtg-python/pull/378
+# tgtg is bundled locally (tgtg/) because the DataDome fix was merged to main
+# but has not yet been released to PyPI (latest release 0.18.4 is from Jul 12, 2025).
+# Once a new release is published, replace with: tgtg>=0.18.5
+# See: https://github.com/ahivert/tgtg-python
 pyTelegramBotAPI>=4.33.0
 requests>=2.33.1
 aiohttp>=3.13.4
