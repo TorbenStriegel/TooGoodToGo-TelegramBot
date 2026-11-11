@@ -1,0 +1,11 @@
+.git
+.github
+data
+config.ini
+.env
+tests
+__pycache__
+*.pyc
+.venv
+venv
+*.txt.migrated

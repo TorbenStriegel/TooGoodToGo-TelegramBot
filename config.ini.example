@@ -1,9 +1,35 @@
+; Copy this file to config.ini and fill in your bot token.
+; Every option can also be set via an environment variable (shown in brackets),
+; which is handy for Docker.
+
 [Telegram]
+; Token from @BotFather                                    (TELEGRAM_TOKEN)
 token = <YOUR_TOKEN>
 
+; Optional: comma separated Telegram user/chat IDs that may use the bot.
+; Empty = everyone who finds the bot can use it (and your server's IP!).
+; Unknown users get their ID shown, so you can add them here.  (ALLOWED_USERS)
+allowed_users =
+
 [TGTG]
-; Optional proxy – leave empty if not needed (works fine without)
-; Only required if your IP is permanently blocked by TGTG
-; Example: http://user:pass@proxy:8080 or socks5://proxy:1080
+; Seconds between checks of your favorites. Minimum 30, default 60.
+; Lower values increase the risk of being blocked by TGTG.  (POLL_INTERVAL)
+poll_interval = 60
+
+; Optional proxy, only needed if TGTG keeps blocking your IP (captcha).
+; Residential proxies work, datacenter/VPN IPs are usually blocked.
+; Examples: http://user:pass@proxy:8080  or  socks5://proxy:1080  (TGTG_PROXY)
 proxy =
 
+; Advanced – only change if TGTG changes its API:
+; base_url = https://api.toogoodtogo.com/api/              (TGTG_BASE_URL)
+; item_endpoint = item/v9/                                 (TGTG_ITEM_ENDPOINT)
+; user_agent =                                             (TGTG_USER_AGENT)
+; language = en-GB                                         (TGTG_LANGUAGE)
+
+[Bot]
+; Time zone for pickup times in messages.                  (TIMEZONE)
+timezone = Europe/Berlin
+
+; Where users.json / stock.json are stored.               (DATA_DIR)
+data_dir = data

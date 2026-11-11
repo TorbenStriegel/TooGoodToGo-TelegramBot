@@ -1,7 +1,6 @@
-# tgtg is bundled locally (tgtg/) because the DataDome fix was merged to main
-# but has not yet been released to PyPI (latest release 0.18.4 is from Jul 12, 2025).
-# Once a new release is published, replace with: tgtg>=0.18.5
-# See: https://github.com/ahivert/tgtg-python
-pyTelegramBotAPI>=4.33.0
-requests>=2.33.1
-aiohttp>=3.13.4
+# Unofficial Too Good To Go API client (https://github.com/ahivert/tgtg-python)
+tgtg>=0.19.0,<0.20
+pyTelegramBotAPI>=4.37.1
+requests>=2.34.2
+# IANA time zone data for Windows (Linux/macOS ship it)
+tzdata; sys_platform == "win32"

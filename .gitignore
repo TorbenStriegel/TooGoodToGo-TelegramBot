@@ -1,15 +1,19 @@
-# User data (contains personal credentials and settings)
-users_login_data.txt
-users_settings_data.txt
-available_items_favorites.txt
+# Bot data (contains TGTG tokens of your users)
+data/
+users_login_data.txt*
+users_settings_data.txt*
+available_items_favorites.txt*
 
-# Config (contains bot token)
+# Config (contains the bot token)
 config.ini
+.env
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
 dist/
 build/
 .venv/
@@ -19,4 +23,3 @@ venv/
 .idea/
 .vscode/
 *.iml
-
