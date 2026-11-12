@@ -32,12 +32,9 @@ you as soon as Surprise Bags become available – often faster than the app.
 Choose **one** option. The bot only sends notifications while it is running, so a computer that is always on
 (Raspberry Pi, NAS, server) is ideal.
 
-<table>
-<tr><th>Option A – Start script<br><sub>Windows · macOS · Linux · Raspberry Pi</sub></th><th>Option B – Docker<br><sub>Server · NAS · Raspberry Pi</sub></th></tr>
-<tr valign="top"><td>
+#### Option A – Start script *(Windows · macOS · Linux · Raspberry Pi)*
 
-Requires [Python 3.11+](https://www.python.org/downloads/)
-(Windows: tick *Add python.exe to PATH*).
+Requires [Python 3.11+](https://www.python.org/downloads/) (Windows: tick *Add python.exe to PATH* during setup).
 
 1. Download the [latest release](https://github.com/TorbenStriegel/TooGoodToGo-TelegramBot/releases/latest)
    (*Source code (zip)*) and unpack it – or `git clone` the repository.
@@ -49,7 +46,7 @@ Requires [Python 3.11+](https://www.python.org/downloads/)
 The script installs everything into a local `.venv` folder and starts the bot. Use the same script to start it
 again later.
 
-</td><td>
+#### Option B – Docker *(server · NAS · Raspberry Pi)*
 
 ```bash
 docker run -d --name tgtg-bot \
@@ -59,21 +56,19 @@ docker run -d --name tgtg-bot \
   ghcr.io/torbenstriegel/toogoodtogo-telegrambot
 ```
 
-Logs: `docker logs -f tgtg-bot`
+Show the logs with `docker logs -f tgtg-bot`.
 
-**Or with Docker Compose:** put
-[`docker-compose.yml`](docker-compose.yml) and [`.env.example`](.env.example) into a folder,
-rename `.env.example` to `.env`, enter the token and run:
+**Or with Docker Compose:** put [`docker-compose.yml`](docker-compose.yml) and [`.env.example`](.env.example) into a
+folder, rename `.env.example` to `.env`, enter the token and run:
 
 ```bash
 docker compose up -d
 ```
 
-</td></tr>
-</table>
+#### Option C – Manual installation
 
 <details>
-<summary><b>Option C – manual installation</b></summary>
+<summary>Show commands</summary>
 
 ```bash
 git clone https://github.com/TorbenStriegel/TooGoodToGo-TelegramBot.git
