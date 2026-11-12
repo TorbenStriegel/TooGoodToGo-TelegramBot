@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.1.0 – 2026-11-12
+
+Based on a night of real-world use. Live-tested against TGTG and Telegram.
+
+### New
+- **Live updates**: a *new bags* notification is edited in place while the bags sell (*3 → 1 available → ❌ Sold out*,
+  with *Updated 08:15*) – no extra messages, no sound. Separate messages for sold out / fewer / more bags are still
+  sent if you switched them on.
+- **Mute single stores** with the 🔕 button under every notification (button turns into 🔔 to undo).
+  `/settings` → *Muted stores* lists them for unmuting. Muted favorites are marked 🔕 in overviews.
+- **Silent at night** (🌙 in `/settings`): notifications between 22:00 and 07:00 arrive without sound.
+
+### Improved
+- `/status` shows the last **successful** check for your account (instead of the last attempt) plus muted stores
+  and night mode.
+- Network problems are logged once per outage (plus one line when it works again) instead of every minute.
+- The *DataDome SDK not reachable* warning (typical with Pi-hole/AdGuard) is logged only once and explained in
+  the README – the bot works without it.
+- Telegram long-polling timeouts are no longer logged as errors.
+
 ## 3.0.0 – 2026-11-11
 
 Complete overhaul. Tested against the live TGTG API (login with PIN, favorites via `item/v9`, token refresh,

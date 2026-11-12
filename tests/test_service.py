@@ -57,7 +57,8 @@ def env(tmp_path):
 
 
 def statuses(sent):
-    return [(p[0]["item"]["item_id"], p[1]) for _, kind, p in sent if kind == "item"]
+    """Notifications the user asked for (unwanted ones only update earlier messages)."""
+    return [(p[0]["item"]["item_id"], p[1]) for _, kind, p in sent if kind == "item" and p[2]]
 
 
 def test_first_poll_is_baseline_then_changes_are_notified(env):
@@ -225,3 +226,15 @@ def test_short_outage_recovers_silently(env):
     service.poll_once()
     service.poll_once()
     assert sent == [] and not service.is_offline("1")
+
+
+def test_unwanted_changes_are_reported_for_live_updates_and_muted_stores_are_skipped(env):
+    service, storage, sent = env  # default: only new_stock wanted
+    storage.set_muted("1", "b", "Store b")
+    FakeClient.script = [[item("a", 0), item("b", 0)], [item("a", 3), item("b", 2)], [item("a", 1), item("b", 0)]]
+    for _ in range(3):
+        service.poll_once()
+    reported = [(p[0]["item"]["item_id"], p[1], p[2]) for _, kind, p in sent if kind == "item"]
+    assert reported == [("a", "new_stock", True), ("a", "stock_reduced", False)]
+    assert storage.last_stock("1") == {"a": 1, "b": 0}  # muted stores are still tracked
+    assert "1" in service.last_success

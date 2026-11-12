@@ -192,9 +192,11 @@ TEXTS: dict[str, dict[str, str]] = {
     # -------------------------------------------------------------- settings
     "settings_title": {
         "en": "🔔 <b>Notify me when …</b>\n"
-        "<i>Tap to switch on 🟢 / off 🔴. Only “New bags” makes a sound, the rest arrives silently.</i>",
+        "<i>Tap to switch on 🟢 / off 🔴. Only “New bags” makes a sound, the rest arrives silently. "
+        "A “New bags” message is updated automatically while the bags sell.</i>",
         "de": "🔔 <b>Benachrichtige mich, wenn …</b>\n"
-        "<i>Tippen zum Ein- 🟢 / Ausschalten 🔴. Nur „Neue Tüten“ macht einen Ton, der Rest kommt lautlos.</i>",
+        "<i>Tippen zum Ein- 🟢 / Ausschalten 🔴. Nur „Neue Tüten“ macht einen Ton, der Rest kommt lautlos. "
+        "Eine „Neue Tüten“-Nachricht wird automatisch aktualisiert, solange verkauft wird.</i>",
     },
     "setting_new_stock": {"en": "✅ New bags", "de": "✅ Neue Tüten"},
     "setting_sold_out": {"en": "❌ Sold out", "de": "❌ Ausverkauft"},
@@ -205,6 +207,24 @@ TEXTS: dict[str, dict[str, str]] = {
     "on": {"en": "on", "de": "an"},
     "off": {"en": "off", "de": "aus"},
     "all_toggled": {"en": "All notifications {state}", "de": "Alle Benachrichtigungen {state}"},
+    # ------------------------------------------------------- mute / quiet
+    "btn_mute": {"en": "🔕 Mute this store", "de": "🔕 Laden stummschalten"},
+    "btn_unmute": {"en": "🔔 Notify me again", "de": "🔔 Wieder benachrichtigen"},
+    "muted_toast": {
+        "en": "🔕 {name}: no more notifications",
+        "de": "🔕 {name}: keine Benachrichtigungen mehr",
+    },
+    "unmuted_toast": {"en": "🔔 {name}: notifications on again", "de": "🔔 {name}: Benachrichtigungen wieder an"},
+    "btn_muted_list": {"en": "🔕 Muted stores ({count})", "de": "🔕 Stummgeschaltete Läden ({count})"},
+    "muted_title": {
+        "en": "🔕 <b>Muted stores</b>\n<i>Tap a store to get notifications for it again.</i>",
+        "de": "🔕 <b>Stummgeschaltete Läden</b>\n<i>Tippe auf einen Laden, um wieder benachrichtigt zu werden.</i>",
+    },
+    "muted_empty": {"en": "No muted stores.", "de": "Keine stummgeschalteten Läden."},
+    "setting_quiet": {"en": "🌙 Silent at night (22–7)", "de": "🌙 Nachts lautlos (22–7 Uhr)"},
+    "status_muted": {"en": "🔕 {count} store(s) muted", "de": "🔕 {count} Laden/Läden stummgeschaltet"},
+    "status_quiet": {"en": "🌙 Silent at night (22–7)", "de": "🌙 Nachts lautlos (22–7 Uhr)"},
+    "updated": {"en": "🔄 Updated {time}", "de": "🔄 Aktualisiert {time}"},
     # ---------------------------------------------------------------- status
     "status_pending": {
         "en": "🟡 Login in progress – send me the PIN from the email.",
@@ -228,8 +248,8 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "status_ok": {"en": "✅ Connection to TGTG OK", "de": "✅ Verbindung zu TGTG OK"},
     "status_last_check": {
-        "en": "🕒 Last check: {time} (every ~{interval}s)",
-        "de": "🕒 Letzte Prüfung: {time} (alle ~{interval}s)",
+        "en": "🕒 Last successful check: {time} (every ~{interval}s)",
+        "de": "🕒 Letzte erfolgreiche Prüfung: {time} (alle ~{interval}s)",
     },
     "status_never": {"en": "🕒 Last check: –", "de": "🕒 Letzte Prüfung: –"},
     # ---------------------------------------------------------------- logout

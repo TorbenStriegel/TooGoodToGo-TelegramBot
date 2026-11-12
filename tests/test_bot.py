@@ -21,6 +21,17 @@ class Recorder:
         bot.send_message = lambda chat_id, text, **kw: self.calls.append(("send", str(chat_id), text, kw))
         bot.send_chat_action = lambda *a, **kw: None
         bot.edit_message_reply_markup = lambda *a, **kw: self.calls.append(("edit", a, kw))
+        bot.edit_message_text = lambda text, **kw: self.calls.append(("edit_text", text, kw))
+        self.next_id = 100
+
+        def send_message(chat_id, text, **kw):
+            self.next_id += 1
+            self.calls.append(("send", str(chat_id), text, kw))
+            return types.Message.de_json(
+                {"message_id": self.next_id, "date": 0, "chat": {"id": int(chat_id), "type": "private"}, "text": text}
+            )
+
+        bot.send_message = send_message
         bot.answer_callback_query = lambda cid, text=None, **kw: self.calls.append(("answer", text))
 
     def texts(self, chat=str(CHAT)):
@@ -54,7 +65,7 @@ def message(text, chat=CHAT, lang=None):
     )
 
 
-def callback(data, chat=CHAT):
+def callback(data, chat=CHAT, text="x", markup=None):
     _uid[0] += 1
     return types.Update.de_json(
         {
@@ -64,7 +75,13 @@ def callback(data, chat=CHAT):
                 "chat_instance": "x",
                 "data": data,
                 "from": {"id": chat, "is_bot": False, "first_name": "T"},
-                "message": {"message_id": 1, "date": 0, "chat": {"id": chat, "type": "private"}, "text": "x"},
+                "message": {
+                    "message_id": 1,
+                    "date": 1,
+                    "chat": {"id": chat, "type": "private"},
+                    "text": text,
+                    **({"reply_markup": markup} if markup else {}),
+                },
             },
         }
     )
@@ -167,3 +184,77 @@ def test_german_user_gets_german_texts(setup):
     send(message("/settings", lang="de"))
     send(callback("sold_out"))
     assert ("answer", "❌ Ausverkauft: an") in rec.calls
+
+
+def logged_in(tb):
+    tb.storage.set_credentials(str(CHAT), {"access_token": "a", "refresh_token": "r"}, email="me@x.de")
+    tb.storage.set_stock(str(CHAT), {"a": 0})
+
+
+def test_new_bags_message_is_updated_in_place_until_sold_out(setup):
+    tb, rec, send = setup
+    logged_in(tb)
+    FakeClient.script = [[item("a", 3)], [item("a", 1)], [item("a", 0)], [item("a", 0)]]
+    tb.service.poll_once()
+    assert rec.texts()[-1].startswith("<b>✅ New bags available!</b>")
+    live_id = rec.next_id
+    assert tb.storage.live_message(str(CHAT), "a") == live_id
+    tb.service.poll_once()  # 3 -> 1: silent edit, no new message
+    edits = [c for c in rec.calls if c[0] == "edit_text"]
+    assert len(edits) == 1 and edits[0][2]["message_id"] == live_id
+    assert "<b>1</b> available" in edits[0][1] and "Updated" in edits[0][1]
+    assert len(rec.texts()) == 1
+    tb.service.poll_once()  # 1 -> 0: message turns into "sold out", live tracking ends
+    assert "Sold out" in [c for c in rec.calls if c[0] == "edit_text"][-1][1]
+    assert tb.storage.live_message(str(CHAT), "a") is None
+    assert len(rec.texts()) == 1
+
+
+def test_mute_store_from_notification_and_unmute_from_settings(setup):
+    tb, rec, send = setup
+    logged_in(tb)
+    FakeClient.script = [[item("a", 2)]]
+    tb.service.poll_once()
+    markup = rec.last_markup().to_dict()
+    assert markup["inline_keyboard"][1][0]["callback_data"] == "mute:a"
+    send(callback("mute:a", text="✅ New bags available!\n🍽 Store a\n🥡 2 available", markup=markup))
+    assert tb.storage.muted(str(CHAT)) == {"a": "Store a"}
+    assert ("answer", "🔕 Store a: no more notifications") in rec.calls
+    swapped = [c for c in rec.calls if c[0] == "edit"][-1][2]["reply_markup"].to_dict()
+    assert swapped["inline_keyboard"][1][0]["callback_data"] == "unmute:a"
+    assert swapped["inline_keyboard"][0][0]["text"] == "📱 Open in app"  # other buttons kept
+    FakeClient.script = [[item("a", 0)], [item("a", 5)]]
+    tb.service.poll_once()
+    tb.service.poll_once()
+    assert len(rec.texts()) == 1  # muted: no new notification
+    send(message("/settings"))
+    rows = rec.last_markup().to_dict()["inline_keyboard"]
+    assert rows[-1][0]["callback_data"] == "muted_list"
+    send(callback("muted_list"))
+    assert rec.last_markup().to_dict()["inline_keyboard"] == [[{"text": "🔔 Store a", "callback_data": "unmute_l:a"}]]
+    send(callback("unmute_l:a"))
+    assert tb.storage.muted(str(CHAT)) == {}
+
+
+def test_quiet_night_and_status(setup, monkeypatch):
+    import tgtg_bot.bot as botmod
+
+    tb, rec, send = setup
+    logged_in(tb)
+    send(message("/settings"))
+    send(callback("quiet"))
+    assert tb.storage.quiet_night(str(CHAT)) is True
+
+    class Night(botmod.datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return botmod.datetime.datetime(2026, 11, 11, 23, 30, tzinfo=tz)
+
+    monkeypatch.setattr(botmod.datetime, "datetime", Night)
+    FakeClient.script = [[item("a", 2)]]
+    tb.service.poll_once()
+    sent = [c for c in rec.calls if c[0] == "send"][-1]
+    assert sent[2].startswith("<b>✅ New bags available!</b>") and sent[3]["disable_notification"] is True
+    send(message("/status"))
+    status = rec.texts()[-1]
+    assert "Silent at night" in status and "Last successful check" in status

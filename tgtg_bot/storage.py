@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -44,15 +45,18 @@ def _write_json_atomic(path: Path, data: dict) -> None:
 
 class Storage:
     """``users.json``: credentials + settings per Telegram chat.
-    ``stock.json``: last seen ``items_available`` per chat and item."""
+    ``stock.json``: last seen ``items_available`` per chat and item.
+    ``messages.json``: id of the last notification per chat and item (updated in place)."""
 
     def __init__(self, data_dir: Path, legacy_dir: Path | None = Path(".")):
         self.data_dir = Path(data_dir)
         self.users_path = self.data_dir / "users.json"
         self.stock_path = self.data_dir / "stock.json"
+        self.messages_path = self.data_dir / "messages.json"
         self._lock = threading.RLock()
         self.users: dict[str, dict] = _read_json(self.users_path)
         self.stock: dict[str, dict[str, int]] = _read_json(self.stock_path)
+        self.messages: dict[str, dict[str, dict]] = _read_json(self.messages_path)
         if not self.users and legacy_dir is not None:
             self._migrate_legacy(Path(legacy_dir))
 
@@ -130,8 +134,10 @@ class Storage:
         with self._lock:
             self.users.pop(chat_id, None)
             self.stock.pop(chat_id, None)
+            self.messages.pop(chat_id, None)
             self.save_users()
             self.save_stock()
+            _write_json_atomic(self.messages_path, self.messages)
 
     def language(self, chat_id: str) -> str:
         return self.users.get(chat_id, {}).get("language", "en")
@@ -163,6 +169,59 @@ class Storage:
 
     def active_users(self) -> list[str]:
         return [cid for cid in list(self.users) if self.wants_notifications(cid)]
+
+    # ------------------------------------------------------------------
+    # Muted stores and quiet night
+    def muted(self, chat_id: str) -> dict[str, str]:
+        """item_id -> store name of favorites the user does not want notifications for."""
+        return dict(self.users.get(chat_id, {}).get("muted", {}))
+
+    def set_muted(self, chat_id: str, item_id: str, name: str | None) -> None:
+        """Mute (``name`` given) or unmute (``name`` None) one favorite."""
+        with self._lock:
+            user = self.users.get(chat_id)
+            if user is None:
+                return
+            muted = user.setdefault("muted", {})
+            if name is None:
+                muted.pop(item_id, None)
+            else:
+                muted[item_id] = name
+            self.save_users()
+
+    def quiet_night(self, chat_id: str) -> bool:
+        return bool(self.users.get(chat_id, {}).get("quiet_night", False))
+
+    def set_quiet_night(self, chat_id: str, value: bool) -> None:
+        with self._lock:
+            if chat_id in self.users:
+                self.users[chat_id]["quiet_night"] = bool(value)
+                self.save_users()
+
+    # ------------------------------------------------------------------
+    # Live notification messages (so they can be updated in place)
+    def live_message(self, chat_id: str, item_id: str) -> int | None:
+        entry = self.messages.get(chat_id, {}).get(item_id)
+        if not entry:
+            return None
+        if entry.get("until", 0) < time.time():
+            self.drop_live_message(chat_id, item_id)
+            return None
+        return entry["id"]
+
+    def set_live_message(self, chat_id: str, item_id: str, message_id: int, until: float) -> None:
+        with self._lock:
+            chat = self.messages.setdefault(chat_id, {})
+            now = time.time()
+            for key in [k for k, v in chat.items() if v.get("until", 0) < now]:
+                chat.pop(key)
+            chat[item_id] = {"id": message_id, "until": until}
+            _write_json_atomic(self.messages_path, self.messages)
+
+    def drop_live_message(self, chat_id: str, item_id: str) -> None:
+        with self._lock:
+            if self.messages.get(chat_id, {}).pop(item_id, None) is not None:
+                _write_json_atomic(self.messages_path, self.messages)
 
     # ------------------------------------------------------------------
     def last_stock(self, chat_id: str) -> dict[str, int]:

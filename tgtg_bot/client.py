@@ -96,6 +96,7 @@ def latest_apk_version() -> str:
 
 
 _APK_VERSION: str | None = None
+_SDK_WARNED = False
 
 
 def parse_cookie_string(raw: str | None) -> dict[str, str]:
@@ -223,7 +224,13 @@ class BotTgtgClient(TgtgClient):
         time.sleep(1)
         if self._request_datadome_cookie(request_url):
             return True
-        logger.warning("Could not obtain a DataDome cookie")
+        global _SDK_WARNED
+        # Common and harmless when DNS filters (Pi-hole, AdGuard, router) block datadome.co:
+        # the API sets the cookie itself. Warn once, then only in debug mode.
+        (logger.debug if _SDK_WARNED else logger.warning)(
+            "Could not obtain a DataDome cookie from the SDK endpoint – continuing without (the API usually sets one)"
+        )
+        _SDK_WARNED = True
         return False
 
     def _request_datadome_cookie(self, request_url: str) -> bool:
