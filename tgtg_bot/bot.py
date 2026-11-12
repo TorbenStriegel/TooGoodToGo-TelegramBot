@@ -430,8 +430,9 @@ class TelegramBot:
         if self.service.has_pending_login(chat_id):
             self._say(chat_id, "status_pending")
             return
+        your_id = self._t(chat_id, "your_id", id=chat_id)
         if not self.storage.is_logged_in(chat_id):
-            self._say(chat_id, "status_logged_out")
+            self._send(chat_id, self._t(chat_id, "status_logged_out") + "\n" + your_id)
             return
         lang = self.lang(chat_id)
         enabled = [t(lang, "setting_" + k) for k, v in self.storage.settings(chat_id).items() if v]
@@ -457,6 +458,7 @@ class TelegramBot:
         if self.storage.quiet_night(chat_id):
             lines.append(t(lang, "status_quiet"))
         lines += [
+            your_id,
             f"<i>v{__version__}</i>",
         ]
         self._send(chat_id, "\n".join(lines))
