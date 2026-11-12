@@ -258,3 +258,4 @@ def test_quiet_night_and_status(setup, monkeypatch):
     send(message("/status"))
     status = rec.texts()[-1]
     assert "Silent at night" in status and "Last successful check" in status
+    assert f"<code>{CHAT}</code>" in status

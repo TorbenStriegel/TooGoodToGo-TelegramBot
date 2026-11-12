@@ -234,6 +234,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "🔴 Not logged in – send me the email address of your TGTG account.",
         "de": "🔴 Nicht angemeldet – schick mir die E-Mail-Adresse deines TGTG-Kontos.",
     },
+    "your_id": {
+        "en": "🆔 Your chat ID: <code>{id}</code> <i>(for allowed_users)</i>",
+        "de": "🆔 Deine Chat-ID: <code>{id}</code> <i>(für allowed_users)</i>",
+    },
     "status_logged_in": {"en": "🟢 Logged in as <b>{email}</b>", "de": "🟢 Angemeldet als <b>{email}</b>"},
     "status_watching": {"en": "❤️ Watching {count} favorite(s)", "de": "❤️ Beobachte {count} Favoriten"},
     "status_notifications": {"en": "🔔 Notifications: {list}", "de": "🔔 Benachrichtigungen: {list}"},

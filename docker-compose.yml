@@ -1,10 +1,14 @@
+# Start:   docker compose up -d        Logs:  docker compose logs -f
+# Update:  docker compose pull && docker compose up -d
 services:
   tgtg-bot:
-    build: .
+    image: ghcr.io/torbenstriegel/toogoodtogo-telegrambot:latest
+    build: .            # used only if the image can't be pulled (or with --build)
     container_name: tgtg-telegram-bot
     restart: unless-stopped
     env_file: .env
-    environment:
-      DATA_DIR: /data
     volumes:
-      - ./data:/data
+      - tgtg-data:/data
+
+volumes:
+  tgtg-data:
