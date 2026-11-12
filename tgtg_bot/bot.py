@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import re
 import threading
+import time
 
 import telebot
 from telebot import TeleBot, types
@@ -12,12 +14,35 @@ from telebot.apihelper import ApiTelegramException
 
 from . import __version__
 from .config import Config
-from .formatting import build_item_text, escape, favorites_overview, item_link, items_available, maps_link
+from .formatting import (
+    build_item_text,
+    escape,
+    favorites_overview,
+    item_id,
+    item_link,
+    items_available,
+    maps_link,
+    pickup_end,
+    store_name,
+)
 from .i18n import COMMANDS, DEFAULT_LANGUAGE, language_for, t
 from .service import BlockedError, LoginError, SessionExpiredError, TgtgService
 from .storage import NOTIFICATION_TYPES, Storage
 
 logger = logging.getLogger(__name__)
+
+QUIET_START, QUIET_END = 22, 7  # "quiet night": notifications without sound from 22:00 to 07:00
+LIVE_MESSAGE_MAX_AGE = 24 * 3600
+
+
+class _TelegramTimeoutFilter(logging.Filter):
+    """Telegram long-polling read timeouts are normal and retried – don't log them as errors."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.ERROR and "timed out" in record.getMessage():
+            record.levelno, record.levelname = logging.INFO, "INFO"
+        return True
+
 
 EMAIL_RE = re.compile(r"^[^@\s/]+@[^@\s]+\.[^@\s]+$")
 PIN_RE = re.compile(r"^\d{4,8}$")
@@ -30,9 +55,11 @@ class TelegramBot:
         # pyTelegramBotAPI ships its own stderr handler → avoid duplicated log lines
         telebot.logger.handlers.clear()
         telebot.logger.propagate = True
+        telebot.logger.addFilter(_TelegramTimeoutFilter())
         self.bot = TeleBot(config.telegram_token, parse_mode="HTML", threaded=True, num_threads=4)
         self.service = TgtgService(config, storage, self.notify)
         self._lang: dict[str, str] = {}
+        self._names: dict[tuple[str, str], str] = {}  # (chat, item_id) -> store name, for the mute button
         self._stop = threading.Event()
         self._register_handlers()
 
@@ -57,9 +84,9 @@ class TelegramBot:
     # Sending
     # ------------------------------------------------------------------
 
-    def _send(self, chat_id: str, text: str, **kwargs) -> None:
+    def _send(self, chat_id: str, text: str, **kwargs) -> types.Message | None:
         try:
-            self.bot.send_message(chat_id, text, disable_web_page_preview=True, **kwargs)
+            return self.bot.send_message(chat_id, text, disable_web_page_preview=True, **kwargs)
         except ApiTelegramException as exc:
             if exc.error_code == 403:  # user blocked the bot
                 logger.info("Chat %s blocked the bot – disabling its notifications", chat_id)
@@ -69,6 +96,7 @@ class TelegramBot:
                 logger.error("Telegram send to %s failed: %s", chat_id, exc)
         except Exception as exc:  # noqa: BLE001
             logger.error("Telegram send to %s failed: %s", chat_id, exc)
+        return None
 
     def _say(self, chat_id: str, key: str, /, reply_markup=None, **kwargs) -> None:
         self._send(chat_id, self._t(chat_id, key, **kwargs), reply_markup=reply_markup)
@@ -94,27 +122,75 @@ class TelegramBot:
             )
         return markup
 
-    def send_item(self, chat_id: str, item: dict, status: str | None = None) -> None:
+    def _quiet_now(self, chat_id: str) -> bool:
+        if not self.storage.quiet_night(chat_id):
+            return False
+        hour = datetime.datetime.now(self.config.timezone).hour
+        return hour >= QUIET_START or hour < QUIET_END
+
+    def _item_markup(self, chat_id: str, item: dict, muted: bool = False) -> types.InlineKeyboardMarkup:
         lang = self.lang(chat_id)
         row = [(t(lang, "btn_open_app"), item_link(item))]
         route = maps_link(item)
         if route:
             row.append((t(lang, "btn_route"), route))
-        self._send(
+        iid = item_id(item)
+        mute = (t(lang, "btn_unmute"), f"unmute:{iid}") if muted else (t(lang, "btn_mute"), f"mute:{iid}")
+        return self._buttons(row, [mute])
+
+    def send_item(self, chat_id: str, item: dict, status: str | None = None) -> types.Message | None:
+        lang = self.lang(chat_id)
+        self._names[(chat_id, item_id(item))] = store_name(item, lang)
+        return self._send(
             chat_id,
             build_item_text(item, self.config.timezone, status, lang=lang),
-            reply_markup=self._buttons(row),
-            # only "new bags" should make a sound – the rest arrives silently
-            disable_notification=status not in (None, "new_stock"),
+            reply_markup=self._item_markup(chat_id, item, muted=item_id(item) in self.storage.muted(chat_id)),
+            # only "new bags" make a sound (and not during the quiet night) – the rest arrives silently
+            disable_notification=status not in (None, "new_stock") or (status is not None and self._quiet_now(chat_id)),
         )
+
+    def _update_live_message(self, chat_id: str, message_id: int, item: dict) -> None:
+        """Silently update an earlier "new bags" message with the current stock."""
+        lang = self.lang(chat_id)
+        iid = item_id(item)
+        sold_out = items_available(item) == 0
+        now = datetime.datetime.now(self.config.timezone)
+        text = build_item_text(item, self.config.timezone, "sold_out" if sold_out else "new_stock", lang=lang)
+        text += "\n<i>" + t(lang, "updated", time=f"{now:%H:%M}") + "</i>"
+        try:
+            self.bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=self._item_markup(chat_id, item),
+                disable_web_page_preview=True,
+            )
+        except ApiTelegramException as exc:
+            if "not modified" not in str(exc):
+                logger.debug("Could not update message %s in chat %s: %s", message_id, chat_id, exc)
+                self.storage.drop_live_message(chat_id, iid)
+                return
+        if sold_out:
+            self.storage.drop_live_message(chat_id, iid)
 
     def notify(self, chat_id: str, kind: str, payload) -> None:
         """Callback used by the polling service."""
-        if kind == "item":
-            item, status = payload
-            self.send_item(chat_id, item, status)
-        else:
+        if kind != "item":
             self._say(chat_id, str(payload))
+            return
+        item, status, wanted = payload
+        iid = item_id(item)
+        if status == "new_stock":
+            message = self.send_item(chat_id, item, status) if wanted else None
+            if message is not None:
+                until = min(pickup_end(item) or time.time() + LIVE_MESSAGE_MAX_AGE, time.time() + LIVE_MESSAGE_MAX_AGE)
+                self.storage.set_live_message(chat_id, iid, message.message_id, until)
+            return
+        live = self.storage.live_message(chat_id, iid)
+        if live:
+            self._update_live_message(chat_id, live, item)
+        if wanted:
+            self.send_item(chat_id, item, status)
 
     # ------------------------------------------------------------------
     # Handlers
@@ -304,7 +380,7 @@ class TelegramBot:
         if not items:
             text = intro + t(lang, "logged_in_no_favorites")
         else:
-            overview = favorites_overview(items, lang=lang)
+            overview = favorites_overview(items, lang=lang, muted=set(self.storage.muted(chat_id)))
             text = intro + t(lang, "logged_in_watching", count=len(items), overview=overview)
         self._send(chat_id, text, reply_markup=self._main_menu(chat_id))
 
@@ -336,7 +412,7 @@ class TelegramBot:
             return
         if not available:
             hint = t(lang, "will_notify" if self.storage.settings(chat_id)["new_stock"] else "notify_off")
-            overview = favorites_overview(items, lang=lang)
+            overview = favorites_overview(items, lang=lang, muted=set(self.storage.muted(chat_id)))
             self._send(chat_id, t(lang, "nothing_available", overview=overview) + "\n\n" + hint)
             return
         for item in sorted(available, key=lambda i: -items_available(i)):
@@ -359,7 +435,8 @@ class TelegramBot:
             return
         lang = self.lang(chat_id)
         enabled = [t(lang, "setting_" + k) for k, v in self.storage.settings(chat_id).items() if v]
-        last = self.service.last_poll
+        last = self.service.last_success.get(chat_id)
+        muted = self.storage.muted(chat_id)
         if self.service.is_blocked(chat_id):
             connection = t(lang, "status_blocked")
         elif self.service.is_offline(chat_id):
@@ -374,6 +451,12 @@ class TelegramBot:
             t(lang, "status_last_check", time=f"{last:%H:%M:%S}", interval=self.config.poll_interval)
             if last
             else t(lang, "status_never"),
+        ]
+        if muted:
+            lines.append(t(lang, "status_muted", count=len(muted)))
+        if self.storage.quiet_night(chat_id):
+            lines.append(t(lang, "status_quiet"))
+        lines += [
             f"<i>v{__version__}</i>",
         ]
         self._send(chat_id, "\n".join(lines))
@@ -382,7 +465,31 @@ class TelegramBot:
         lang = self.lang(chat_id)
         settings = self.storage.settings(chat_id)
         buttons = [(f"{'🟢' if settings[k] else '🔴'} {t(lang, 'setting_' + k)}", k) for k in NOTIFICATION_TYPES]
-        return self._buttons(buttons[:2], buttons[2:], [(t(lang, "all_on"), "all_on"), (t(lang, "all_off"), "all_off")])
+        quiet = self.storage.quiet_night(chat_id)
+        rows = [
+            buttons[:2],
+            buttons[2:],
+            [(t(lang, "all_on"), "all_on"), (t(lang, "all_off"), "all_off")],
+            [(f"{'🟢' if quiet else '🔴'} {t(lang, 'setting_quiet')}", "quiet")],
+        ]
+        muted = self.storage.muted(chat_id)
+        if muted:
+            rows.append([(t(lang, "btn_muted_list", count=len(muted)), "muted_list")])
+        return self._buttons(*rows)
+
+    def _muted_keyboard(self, chat_id: str) -> types.InlineKeyboardMarkup:
+        muted = self.storage.muted(chat_id)
+        return self._buttons(
+            *[[(f"🔔 {name}", f"unmute_l:{iid}")] for iid, name in sorted(muted.items(), key=lambda m: m[1])]
+        )
+
+    def _name_from_message(self, call: types.CallbackQuery, iid: str) -> str:
+        """Store name for a mute button: from the notification text (line starting with 🍽),
+        else from the names of recently sent items."""
+        for line in (getattr(call.message, "text", None) or "").splitlines():
+            if line.startswith("🍽"):
+                return line.lstrip("🍽").strip()
+        return self._names.get((str(call.message.chat.id), iid), f"#{iid}")
 
     # ------------------------------------------------------------------
     # Inline buttons
@@ -413,6 +520,39 @@ class TelegramBot:
                     )
                 except ApiTelegramException:
                     pass  # "message is not modified"
+        elif data == "quiet":
+            if self.storage.is_logged_in(chat_id):
+                value = not self.storage.quiet_night(chat_id)
+                self.storage.set_quiet_night(chat_id, value)
+                toast = f"{t(lang, 'setting_quiet')}: {t(lang, 'on' if value else 'off')}"
+                self._refresh_markup(call, self._settings_keyboard(chat_id))
+        elif data == "muted_list":
+            self.bot.answer_callback_query(call.id)
+            if self.storage.muted(chat_id):
+                self._say(chat_id, "muted_title", reply_markup=self._muted_keyboard(chat_id))
+            else:
+                self._say(chat_id, "muted_empty")
+            return
+        elif data.startswith(("mute:", "unmute:", "unmute_l:")):
+            action, _, iid = data.partition(":")
+            if not self.storage.is_logged_in(chat_id):
+                toast = t(lang, "need_login")
+            elif action == "mute":
+                name = self._name_from_message(call, iid)
+                self.storage.set_muted(chat_id, iid, name)
+                self.storage.drop_live_message(chat_id, iid)
+                toast = t(lang, "muted_toast", name=name)
+                self._swap_mute_button(call, iid, muted=True)
+            else:
+                name = self.storage.muted(chat_id).get(iid, "")
+                self.storage.set_muted(chat_id, iid, None)
+                toast = t(lang, "unmuted_toast", name=name)
+                if action == "unmute":
+                    self._swap_mute_button(call, iid, muted=False)
+                elif self.storage.muted(chat_id):
+                    self._refresh_markup(call, self._muted_keyboard(chat_id))
+                else:
+                    self._clear_buttons(call)
         elif data in ("info", "settings", "status"):
             self.bot.answer_callback_query(call.id)
             {"info": self._show_info, "settings": self._show_settings, "status": self._show_status}[data](chat_id)
@@ -435,6 +575,29 @@ class TelegramBot:
             else:
                 toast = t(lang, "cancelled")
         self.bot.answer_callback_query(call.id, toast)
+
+    def _refresh_markup(self, call: types.CallbackQuery, markup: types.InlineKeyboardMarkup) -> None:
+        try:
+            self.bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=markup)
+        except ApiTelegramException:
+            pass  # "message is not modified"
+
+    def _swap_mute_button(self, call: types.CallbackQuery, iid: str, muted: bool) -> None:
+        """Replace 🔕/🔔 in the keyboard of a notification, keep the other buttons."""
+        markup = getattr(call.message, "reply_markup", None)
+        if markup is None:
+            return
+        lang = self.lang(str(call.message.chat.id))
+        label, data = (t(lang, "btn_unmute"), f"unmute:{iid}") if muted else (t(lang, "btn_mute"), f"mute:{iid}")
+        rows = []
+        for row in markup.keyboard:
+            new_row = []
+            for button in row:
+                if button.callback_data and button.callback_data.startswith(("mute:", "unmute:")):
+                    button = types.InlineKeyboardButton(label, callback_data=data)
+                new_row.append(button)
+            rows.append(new_row)
+        self._refresh_markup(call, types.InlineKeyboardMarkup(rows))
 
     def _clear_buttons(self, call: types.CallbackQuery) -> None:
         try:

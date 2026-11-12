@@ -95,6 +95,14 @@ def format_pickup(item: dict, tz: tzinfo, now: datetime | None = None, lang: str
     return f"{_day_label(start, now, lang)} {start:%H:%M} – {_day_label(end, now, lang)} {end:%H:%M}"
 
 
+def pickup_end(item: dict) -> float | None:
+    """End of the pickup window as Unix timestamp (None if unknown)."""
+    try:
+        return _parse_time(item["pickup_interval"]["end"]).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def store_name(item: dict, lang: str = "en") -> str:
     if item.get("display_name"):
         return item["display_name"]
@@ -170,12 +178,13 @@ def maps_link(item: dict) -> str | None:
     return f"https://www.google.com/maps/search/?api=1&query={quote(addr)}" if addr else None
 
 
-def favorites_overview(items: list[dict], limit: int = 15, lang: str = "en") -> str:
-    """One line per favorite: name + availability (available ones first)."""
+def favorites_overview(items: list[dict], limit: int = 15, lang: str = "en", muted: set[str] | None = None) -> str:
+    """One line per favorite: name + availability (available ones first). Muted favorites get a 🔕."""
+    muted = muted or set()
     lines = []
     for item in sorted(items, key=lambda i: (-items_available(i), store_name(i, lang)))[:limit]:
         count = items_available(item)
-        name = escape(store_name(item, lang))
+        name = escape(store_name(item, lang)) + (" 🔕" if item_id(item) in muted else "")
         if count:
             lines.append(f"🟢 {name} – <b>{count}</b> {t(lang, 'available')}")
         else:

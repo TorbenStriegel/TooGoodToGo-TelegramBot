@@ -12,6 +12,10 @@ messages you as soon as bags become available – faster than waiting for the ap
 
 - 🔔 **Notifications** for your favorites: new bags, sold out, fewer bags, more bags – each switchable with one tap.
   Only *new bags* make a sound, everything else arrives silently.
+- 🔄 **Live updates** – a *new bags* message keeps itself up to date while the bags sell (*3 → 1 available →
+  ❌ Sold out*) instead of flooding the chat with new messages
+- 🔕 **Mute single stores** right from a notification, and unmute them later in `/settings`
+- 🌙 **Silent at night** – optional: notifications between 22:00 and 07:00 arrive without sound
 - 🔑 **Login in 2 messages** – send your email, then the PIN from the TGTG email. No password, no commands to remember.
 - 🛍 **Rich messages** – store, bag type, ⭐ rating, price vs. original value, pickup window (*Today 17:00–18:30*,
   in your time zone), address plus buttons **📱 Open in app** and **📍 Route**
@@ -109,8 +113,10 @@ journalctl -u tgtg-bot -f
 | *your email address* or `/login your@email.com` | Start the login – TGTG emails you a PIN |
 | *the PIN* or `/pin 123456` | Finish the login (a button lets you request a new PIN) |
 | `/info` | What's available right now |
-| `/settings` | Choose notifications: ✅ new bags · ❌ sold out · 📉 fewer bags · 📈 more bags |
-| `/status` | Login, number of watched favorites, connection state and last check |
+| `/settings` | Choose notifications: ✅ new bags · ❌ sold out · 📉 fewer bags · 📈 more bags · 🌙 silent at night · 🔕 muted stores |
+| `/status` | Login, number of watched favorites, connection state and last successful check |
+
+Every notification has the buttons **📱 Open in app**, **📍 Route** and **🔕 Mute this store**.
 | `/logout` | Log out and delete all your data from the bot (with confirmation) |
 
 ## Configuration
@@ -151,6 +157,9 @@ Simply `/login` again.
 0 to ≥1 bags. Bags that were already available when you logged in are shown in the overview / `/info`.
 Check `/settings` (is ✅ *New bags* 🟢?) and `/status`.
 
+**"Could not obtain a DataDome cookie from the SDK endpoint" in the log** – harmless. DNS filters such as Pi-hole,
+AdGuard or some routers block `datadome.co`; the TGTG API sets the cookie itself, so the bot works anyway.
+
 **HTTP 409 "terminated by other getUpdates request" in the log** – the same bot token is used by a second running
 instance. Stop the other one; the bot retries automatically.
 
@@ -187,7 +196,7 @@ tgtg_bot/
 ├── bot.py         Telegram commands and messages
 ├── service.py     login, fetching favorites, polling, back-off
 ├── client.py      TGTG API client (wraps the tgtg library)
-├── storage.py     users.json / stock.json, migration from 2.x
+├── storage.py     users.json / stock.json / messages.json, migration from 2.x
 ├── formatting.py  message layout
 ├── i18n.py        all texts in English and German
 └── config.py      config.ini + environment variables

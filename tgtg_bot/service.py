@@ -27,7 +27,10 @@ BLOCK_BACKOFF_MAX = 60 * 60
 PENDING_LOGIN_TTL = 30 * 60
 OFFLINE_NOTIFY_AFTER = 20 * 60  # tell users after 20 min without connection
 
-# notify(chat_id, kind, payload) – kind "item": payload = (item, status); kind "text": payload = i18n key
+# notify(chat_id, kind, payload)
+#   kind "item": payload = (item, status, wanted) – wanted: the user enabled this notification type.
+#                Unwanted changes are still reported so an earlier message can be updated in place.
+#   kind "text": payload = i18n key
 Notifier = Callable[[str, str, object], None]
 
 
@@ -75,6 +78,8 @@ class TgtgService:
         self._block_delay: dict[str, int] = {}
         self._offline_since: dict[str, float] = {}
         self._offline_notified: set[str] = set()
+        self._error_streak: dict[str, int] = {}
+        self.last_success: dict[str, datetime.datetime] = {}
         self.last_poll: datetime.datetime | None = None
 
     # ------------------------------------------------------------------
@@ -253,7 +258,9 @@ class TgtgService:
         with self._lock(chat_id):
             client = self._client(chat_id)
             try:
-                return self._fetch(client)
+                items = self._fetch(client)
+                self.last_success[chat_id] = datetime.datetime.now(self.config.timezone)
+                return items
             except SessionExpiredError:
                 self.forget_client(chat_id)
                 self.storage.mark_needs_login(chat_id)
@@ -279,7 +286,11 @@ class TgtgService:
 
     def _on_network_error(self, chat_id: str, exc: Exception) -> None:
         since = self._offline_since.setdefault(chat_id, time.time())
-        logger.warning("Chat %s: TGTG not reachable (%s)", chat_id, type(exc).__name__)
+        streak = self._error_streak[chat_id] = self._error_streak.get(chat_id, 0) + 1
+        # one warning per outage, details only in debug mode
+        log = logger.warning if streak == 1 else logger.debug
+        log("Chat %s: TGTG not reachable (%s) – retrying quietly", chat_id, type(exc).__name__)
+        logger.debug("Network error details: %s", exc)
         if time.time() - since >= OFFLINE_NOTIFY_AFTER and chat_id not in self._offline_notified:
             self._offline_notified.add(chat_id)
             self.notify(chat_id, "text", "offline_notice")
@@ -288,6 +299,10 @@ class TgtgService:
         return chat_id in self._offline_since
 
     def _on_success(self, chat_id: str) -> None:
+        self.last_success[chat_id] = datetime.datetime.now(self.config.timezone)
+        streak = self._error_streak.pop(chat_id, 0)
+        if streak > 1:
+            logger.info("Chat %s: TGTG reachable again after %d failed checks", chat_id, streak)
         self._blocked_until.pop(chat_id, None)
         self._offline_since.pop(chat_id, None)
         was_blocked = self._block_delay.pop(chat_id, None) is not None
@@ -321,6 +336,7 @@ class TgtgService:
         old = self.storage.last_stock(chat_id)
         has_baseline = chat_id in self.storage.stock
         settings = self.storage.settings(chat_id)
+        muted = self.storage.muted(chat_id)
         new: dict[str, int] = {}
         for item in items:
             iid = item_id(item)
@@ -334,9 +350,13 @@ class TgtgService:
                 status = "new_stock"  # newly added favorite that has bags
             else:
                 status = None
-            if status and settings.get(status):
+            if not status or iid in muted:
+                continue
+            wanted = settings.get(status, False)
+            if wanted:
                 logger.info("Chat %s: %s – %s (%d)", chat_id, status, item.get("display_name", iid), count)
-                self.notify(chat_id, "item", (item, status))
+            if wanted or status != "new_stock":
+                self.notify(chat_id, "item", (item, status, wanted))
         self.storage.set_stock(chat_id, new)
 
     def poll_once(self) -> None:
